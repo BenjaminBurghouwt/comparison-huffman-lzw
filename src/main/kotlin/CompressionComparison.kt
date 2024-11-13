@@ -4,30 +4,32 @@ import com.bburghouwt.compression.algorithms.huffman.HuffmanCompressor
 import com.bburghouwt.compression.algorithms.huffman.HuffmanDecompressor
 import com.bburghouwt.compression.algorithms.lzw.LzwCompressor
 import com.bburghouwt.compression.algorithms.lzw.LzwDecompressor
-import com.bburghouwt.compression.metrics.ReportPrinter
-import com.bburghouwt.compression.metrics.measureTimeMillis
+import com.bburghouwt.compression.metrics.GlobalReportPrinter
+import com.bburghouwt.compression.metrics.ResourceUsagePrinter
 import com.bburghouwt.compression.getTextFiles
+import com.bburghouwt.compression.metrics.CompressionMetrics
 import com.bburghouwt.compression.readTextFile
-import java.lang.management.ManagementFactory
-import com.sun.management.OperatingSystemMXBean
+
+private val metrics = CompressionMetrics()
 
 fun compressionComparison(printSummary: Boolean, printAllReports: Boolean, printSummaryForSheets: Boolean) {
+
     val inputFiles = getTextFiles("src/main/resources/texts")
-    val reportPrinter = ReportPrinter()
+    val reportPrinter = GlobalReportPrinter()
 
     inputFiles.forEach { filePath ->
         val inputText = readTextFile(filePath)
 
         val lzwCompressor = LzwCompressor()
-        val lzwCompression = measureTimeMillis { lzwCompressor.compress(inputText) }
+        val lzwCompression = metrics.measureTimeMillis { lzwCompressor.compress(inputText) }
         val (lzwCompressedData, lzwBitWidth) = lzwCompression.result
         val lzwDecompressor = LzwDecompressor()
-        val lzwDecompressedData = measureTimeMillis { lzwDecompressor.decompress(lzwCompressedData) }
+        val lzwDecompressedData = metrics.measureTimeMillis { lzwDecompressor.decompress(lzwCompressedData) }
 
         val huffmanCompressor = HuffmanCompressor()
-        val huffmanCompressedData = measureTimeMillis { huffmanCompressor.compress(inputText) }
+        val huffmanCompressedData = metrics.measureTimeMillis { huffmanCompressor.compress(inputText) }
         val huffmanDecompressor = HuffmanDecompressor(huffmanCompressor.getHuffmanCodes())
-        val huffmanDecompressedData = measureTimeMillis { huffmanDecompressor.decompress(huffmanCompressedData.result) }
+        val huffmanDecompressedData = metrics.measureTimeMillis { huffmanDecompressor.decompress(huffmanCompressedData.result) }
 
         reportPrinter.appendToReport(
             inputText,
@@ -57,41 +59,23 @@ fun compressionComparison(printSummary: Boolean, printAllReports: Boolean, print
 
 fun compressionResourceUsage() {
     val inputFiles = getTextFiles("src/main/resources/texts")
-    val reportPrinter = ReportPrinter()
+    val resourceUsagePrinter = ResourceUsagePrinter()
 
     inputFiles.forEach { filePath ->
         val inputText = readTextFile(filePath)
 
-        val (lzwMemoryUsage, lzwCpuUsage) = measureResourceUsage {
+        val (lzwMemoryUsage, lzwCpuUsage) = metrics.measureResourceUsage {
             val lzwCompressor = LzwCompressor()
             lzwCompressor.compress(inputText)
         }
 
-        val (huffmanMemoryUsage, huffmanCpuUsage) = measureResourceUsage {
+        val (huffmanMemoryUsage, huffmanCpuUsage) = metrics.measureResourceUsage {
             val huffmanCompressor = HuffmanCompressor()
             huffmanCompressor.compress(inputText)
         }
 
-        reportPrinter.appendResourceUsage(inputText, Pair(lzwMemoryUsage, lzwCpuUsage), Pair(huffmanMemoryUsage, huffmanCpuUsage))
+        resourceUsagePrinter.appendResourceUsage(inputText, Pair(lzwMemoryUsage, lzwCpuUsage), Pair(huffmanMemoryUsage, huffmanCpuUsage))
     }
 
-    reportPrinter.printResourceUsageTable()
-}
-
-private fun measureResourceUsage(block: () -> Unit): Pair<Long, Double> {
-    val runtime = Runtime.getRuntime()
-    val osBean = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean::class.java) as OperatingSystemMXBean
-
-    val memoryBefore = runtime.totalMemory() - runtime.freeMemory()
-    val cpuLoadBefore = osBean.processCpuLoad
-
-    block()
-
-    val memoryAfter = runtime.totalMemory() - runtime.freeMemory()
-    val cpuLoadAfter = osBean.processCpuLoad
-
-    val memoryUsage = memoryAfter - memoryBefore
-    val cpuUsagePercentage = (cpuLoadAfter - cpuLoadBefore) * 100
-
-    return Pair(memoryUsage, cpuUsagePercentage)
+    resourceUsagePrinter.printResourceUsageTable()
 }
