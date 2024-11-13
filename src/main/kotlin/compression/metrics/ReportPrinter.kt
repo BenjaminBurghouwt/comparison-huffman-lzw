@@ -3,6 +3,7 @@ package com.bburghouwt.compression.metrics
 class ReportPrinter {
 
     private val allReports = mutableListOf<String>()
+    private val resourceUsageData = mutableListOf<ResourceUsage>()
     private val summary = mutableListOf<SummaryEntry>()
 
     data class SummaryEntry(
@@ -15,7 +16,15 @@ class ReportPrinter {
         val huffmanDecompressionTime: Long,
     )
 
-    fun printReport(
+    data class ResourceUsage(
+        val inputText: String,
+        val lzwMemoryUsage: Long,
+        val lzwCpuUsage: Double,
+        val huffmanMemoryUsage: Long,
+        val huffmanCpuUsage: Double
+    )
+
+    fun appendToReport(
         inputText: String,
         lzwCompressedData: List<Int>,
         lzwBitWidth: Int,
@@ -56,6 +65,7 @@ class ReportPrinter {
         }
 
         allReports.add(report.toString())
+
         println("\u001B[32mCompressed file: ${formatSize(inputText.length)}\u001B[0m")
 
         summary.add(
@@ -127,14 +137,36 @@ class ReportPrinter {
         println(summaryReport.toString())
     }
 
+    fun appendResourceUsage(
+        inputText: String,
+        lzwUsage: Pair<Long, Double>,
+        huffmanUsage: Pair<Long, Double>
+    ) {
+        println("\u001B[32mCompressed file: ${formatSize(inputText.length)}\u001B[0m")
+        resourceUsageData.add(ResourceUsage(inputText, lzwUsage.first, lzwUsage.second, huffmanUsage.first, huffmanUsage.second))
+    }
+
+    fun printResourceUsageTable() {
+        val sortedResourceUsageData = resourceUsageData.sortedBy { it.inputText.length }
+
+        println("=== Resource Usage Table ===")
+        println(String.format("%-15s | %-15s | %-15s | %-15s | %-15s", "File Size", "LZW Memory", "LZW CPU (%)", "Huffman Memory", "Huffman CPU (%)"))
+        println("-".repeat(80))
+
+        sortedResourceUsageData.forEach { usage ->
+            val fileSize = formatSize(usage.inputText.length)
+            println(String.format("%-15s | %-15s | %-15.2f | %-15s | %-15.2f", fileSize, formatSize(usage.lzwMemoryUsage.toInt()), usage.lzwCpuUsage, formatSize(usage.huffmanMemoryUsage.toInt()), usage.huffmanCpuUsage))
+        }
+    }
 
     private fun formatSize(sizeInBytes: Int): String {
-        val size = sizeInBytes.toFloat()
-        return when {
-            size >= 1_048_576 -> String.format("%.2f MB", size / 1_048_576)
-            size >= 1_024 -> String.format("%.2f KB", size / 1_024)
-            else -> String.format("%.2f bytes", size)
+        val absSize = kotlin.math.abs(sizeInBytes).toFloat()
+        val formattedSize = when {
+            absSize >= 1_048_576 -> String.format("%.2f MB", absSize / 1_048_576)
+            absSize >= 1_024 -> String.format("%.2f KB", absSize / 1_024)
+            else -> String.format("%.2f bytes", absSize)
         }
+        return if (sizeInBytes < 0) "-$formattedSize" else formattedSize
     }
 
     private fun formatRatio(ratio: Double): String = "%.2f%%".format(ratio)

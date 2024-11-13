@@ -48,4 +48,4 @@ class LzwCompressor {
     private fun calculateBitWidth(dictSize: Int): Int {
         return ceil(ln(dictSize.toDouble()) / ln(2.0)).toInt()
     }
- }
+}
